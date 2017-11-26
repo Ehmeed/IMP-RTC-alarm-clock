@@ -1,12 +1,20 @@
-// Milan Hruban
-// xhruba08
-// originál
+/*
+
+ * main.c
+ *
+ *  Created on: 20. 11. 2017
+ *      Author: Milan Hruban (xhruba08)
+ *      Original
+ */
+
 
 #include "MK60D10.h"
 #include "stdio.h"
 #include "ctype.h"
 #include "string.h"
 #include "time.h"
+
+#include "starWarsFont.c";
 
 // Mapping of LEDs and buttons to specific port pins:
 #define LED_D9  0x20 // Port B, bit 5
@@ -27,6 +35,8 @@ unsigned int soundType = 1;
 unsigned int lightTypeCount = 3;
 unsigned int soundTypeCount = 3;
 
+unsigned int fancyClock = 0;
+
 unsigned int alarmOn = 0;
 unsigned int alarmRinging = 0;
 unsigned int alarmRepetitions = 0;
@@ -35,7 +45,7 @@ unsigned int alarmTimeSeconds = 0;
 
 // index of item that user's arrows points at
 unsigned int menuItemArrow = 0;
-unsigned int menuItemCount = 7;
+unsigned int menuItemCount = 8;
 
 // user input
 unsigned int maxInputLength = 4;
@@ -232,7 +242,7 @@ void SendWelcome(){
 	SendString("ALARM CLOCK\r\n");
 	SendString("This project was created by Milan Hruban at BUT VUT\r\n\r\n");
 }
-// draws menu on the screens
+// draws menu on the screen
 void drawMenu(void){
 	SendString("\r\n\r\n\r\n\r\n----------MENU----------\r\n\r\n");
 	SendString("- change time ");SendTimeSeconds(RTC->TSR); if(menuItemArrow==0) {SendString(" <--");} SendString("\r\n");
@@ -241,7 +251,47 @@ void drawMenu(void){
 	SendString("- repetition delay: "); SendTimeSeconds(alarmRepetitionDelay); if(menuItemArrow==3) {SendString(" <--");} SendString("\r\n");
 	SendString("- Alarm tone: "); SendInt(soundType); if(menuItemArrow==4) {SendString(" <--");} SendString("\r\n");
 	SendString("- Light notification: "); SendInt(lightType); if(menuItemArrow==5) {SendString(" <--");} SendString("\r\n");
-	SendString("- Exit menu"); if(menuItemArrow==6) {SendString(" <--");} SendString("\r\n");
+	SendString("- Fancy clock: "); fancyClock ? SendString("ON") : SendString("OFF"); if(menuItemArrow==6) {SendString(" <--");} SendString("\r\n");
+	SendString("- Exit menu"); if(menuItemArrow==7) {SendString(" <--");} SendString("\r\n");
+}
+// draws time from RTC register on screen
+void drawTime(void){
+	if(fancyClock == 0){
+		char timeValue[8];
+		ConvertToHhmmss(timeValue, RTC->TSR);
+		SendString(timeValue);
+		SendString("\r\n");
+	}else{
+		int seconds = RTC->TSR;
+		int hours = seconds / 3600;
+		seconds -= 3600 * hours;
+		int minutes = seconds / 60;
+		seconds -= 60 * minutes;
+
+		int timeDigits[8];
+		if(hours < 10) timeDigits[0] = 0;
+		else timeDigits[0] = hours / 10;
+		timeDigits[1] = hours % 10;
+		timeDigits[2] = 10;
+
+		if(minutes < 10) timeDigits[3] = 0;
+		else timeDigits[3] = minutes / 10;
+		timeDigits[4] = minutes % 10;
+		timeDigits[5] = 10;
+
+		if(seconds < 10) timeDigits[6] = 0;
+		else timeDigits[6] = seconds / 10;
+		timeDigits[7] = seconds % 10;
+
+		for(int i = 0; i < 6; i++){
+			for(int j = 0; j < 8; j++){
+				if(timeDigits[j] == 10) continue;
+				SendString(asciiSWFont[timeDigits[j]][i]);
+				SendString("   ");
+			}
+			SendString("\r\n");
+		}
+	}
 }
 // handles pressing left button in menu
 void PressedLeft(){
@@ -285,6 +335,9 @@ void PressedLeft(){
 				lightType--;
 			}
 			break;
+		case 6:
+			fancyClock = fancyClock ? 0 : 1;
+			break;
 		default:
 			beep();
 			break;
@@ -327,6 +380,9 @@ void PressedRight(){
 			}else{
 				lightType++;
 			}
+			break;
+		case 6:
+			fancyClock = fancyClock ? 0 : 1;
 			break;
 		default:
 			beep();
@@ -389,6 +445,9 @@ int PressedAction(){
 			playAlarmLight();
 			break;
 		case 6:
+			fancyClock = fancyClock ? 0 : 1;
+			break;
+		case 7:
 			return 0;
 			break;
 		default:
@@ -483,7 +542,8 @@ int main(void)
 	while(1){
 		//ReceiveString(4);
 		//RTCSet(strtol(userInput));
-		SendInt(RTC->TSR);
+		//SendInt(RTC->TSR);
+		drawTime();
 		SendString("\r\n");
 		//GPIOB_PDOR ^= LED_D9;
 		delay(2555555);
