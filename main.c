@@ -40,6 +40,7 @@ unsigned int fancyClock = 0;
 unsigned int alarmOn = 0;
 unsigned int alarmRinging = 0;
 unsigned int alarmRepetitions = 0;
+unsigned int alarmRepetitionsPerformed = 0;
 unsigned int alarmRepetitionDelay = 300;
 unsigned int alarmTimeSeconds = 0;
 
@@ -68,11 +69,15 @@ int q;
 }
 // play alarm sound that is set
 void playAlarmSound(void){
-
+	SendString("Alarm sound playing");
 }
 // player alarm light notification that is set
 void playAlarmLight(void){
-
+	SendString("Alarm light playing");
+}
+// alarms
+void performAlarm(void){
+	SendString("Alarm happening\r\n");
 }
 // sends one character via UART
 void SendChar(char ch)  {
@@ -179,7 +184,7 @@ void RTCInit(void){
 	RTC->TCR = 0;
 	RTC->TAR = 0;
 	RTC->TSR = 1;
-	//NVIC_EnableIRQ(RTC_IRQn);
+	NVIC_EnableIRQ(RTC_IRQn);
 	RTCStart();
 }
 // Overwrites TSR register of RTC
@@ -448,6 +453,8 @@ int PressedAction(){
 			fancyClock = fancyClock ? 0 : 1;
 			break;
 		case 7:
+			menuItemArrow = 0;
+			RTC->TAR = alarmTimeSeconds;
 			return 0;
 			break;
 		default:
@@ -458,7 +465,8 @@ int PressedAction(){
 
 // handles user input from menu
 void getMenuInput(void){
-	int pressed_up = 0, pressed_down = 0, pressed_left = 0, pressed_right = 0, pressed_action = 0;
+	// presed action set to 1 to prevent instant click when returning from main loop
+	int pressed_up = 0, pressed_down = 0, pressed_left = 0, pressed_right = 0, pressed_action = 1;
 	drawMenu();
 	while(1){
 		if(!pressed_up && !(GPIOE_PDIR & BTN_SW5)){
@@ -522,7 +530,7 @@ void GetSettings(){
 	SendString("\r\n");
 	// show menu controlled by arrow keys
 	getMenuInput();
-	SendString("You can open menu any time by pressing the Action button (SW6)\r\n");
+	SendString("You can open menu any time by holding down the Action button (SW6)\r\n");
 }
 // gets time in user input field returns zero on fail
 int GetTime(){
@@ -534,19 +542,54 @@ int GetTime(){
 	}
 	return secondsSet;
 }
+void RTC_IRQHandler(void) {
+	if(((RTC_SR & RTC_SR_TAF_MASK) == 0x04) && alarmOn){
+		if(alarmRepetitions > 0 && alarmRepetitionsPerformed <= alarmRepetitions){
+			alarmRepetitionsPerformed++;
+			RTC->TAR += alarmRepetitionDelay;
+			alarmTimeSeconds = RTC->TAR;
+			alarmRinging = 1;
+		}
+		if(alarmRepetitions > 0 && alarmRepetitions < alarmRepetitionsPerformed){
+			alarmRepetitionsPerformed = 0;
+			alarmOn = 0;
+			RTC->TAR = alarmTimeSeconds;
+		}
+		if(alarmRepetitions == 0){
+			RTC->TAR = alarmTimeSeconds;
+			alarmOn = 0;
+			alarmRinging = 1;
+		}
+
+	}
+}
 int main(void)
 {
 	Init();
 	SendWelcome();
 	GetSettings();
+	unsigned int delayPeriod = 2555555;
+	unsigned int pressedAction = 1;
 	while(1){
-		//ReceiveString(4);
-		//RTCSet(strtol(userInput));
-		//SendInt(RTC->TSR);
 		drawTime();
-		SendString("\r\n");
+		// check if user wants to open the menu
+		if(!pressedAction && !(GPIOE_PDIR & BTN_SW6)){
+			pressedAction = 1;
+			getMenuInput();
+		}else if (GPIOE_PDIR & BTN_SW6) pressedAction = 0;
+		if(alarmRinging){
+			performAlarm();
+			if(!(GPIOE_PDIR & BTN_SW5)){
+				alarmRinging = 0;
+				alarmOn = 0;
+				alarmRepetitionsPerformed = 0;
+			}else if(!(GPIOE_PDIR & BTN_SW2) || !(GPIOE_PDIR & BTN_SW3) || !(GPIOE_PDIR & BTN_SW4)){
+				alarmRinging = 0;
+			}
+		}
+
 		//GPIOB_PDOR ^= LED_D9;
-		delay(2555555);
+		delay(delayPeriod);
 	}
 }
 ////////////////////////////////////////////////////////////////////////////////
