@@ -625,7 +625,6 @@ void RTC_IRQHandler(void) {
 
 	}else {
 		//invalid time -> reset the clock
-		int a = RTC->TSR;
 		RTC->TAR = alarmTimeSeconds;
 		if(RTC->TSR > 0 && RTC->TSR < secondsInDay){
 			RTC->TSR = RTC->TSR;
@@ -690,6 +689,10 @@ int main(void)
 				alarmRepetitionsPerformed = 0;
 			}else if(!(GPIOE_PDIR & BTN_SW2) || !(GPIOE_PDIR & BTN_SW3) || !(GPIOE_PDIR & BTN_SW4)){
 				alarmRinging = 0;
+				if(alarmRepetitions == 0 || (alarmRepetitionsPerformed >= alarmRepetitions)){
+					alarmOn = 0;
+					alarmRepetitionsPerformed = 0;
+				}
 			}
 			//compensate for delay created by alarm ringing 250k, 750k, 1250k
 			delayPeriod -= calculateDelayCompensation();
