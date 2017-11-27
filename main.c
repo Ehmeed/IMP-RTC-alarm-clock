@@ -67,17 +67,78 @@ int q;
     	delay(500);
     }
 }
+//flashes all leds
+void flashLeds(int l9, int l10, int l11, int l12){
+	if(l9)GPIOB_PDOR ^= LED_D9;
+	if(l10)GPIOB_PDOR ^= LED_D10;
+	if(l11)GPIOB_PDOR ^= LED_D11;
+	if(l12)GPIOB_PDOR ^= LED_D12;
+	delay(60000);
+	if(l9)GPIOB_PDOR ^= LED_D9;
+	if(l10)GPIOB_PDOR ^= LED_D10;
+	if(l11)GPIOB_PDOR ^= LED_D11;
+	if(l12)GPIOB_PDOR ^= LED_D12;
+}
 // play alarm sound that is set
 void playAlarmSound(void){
-	SendString("Alarm sound playing");
+	switch(soundType){
+		case 1:
+			beep();
+			break;
+		case 2:
+			for(int i = 0; i < 3; i++){
+				beep();
+				delay(200);
+			}
+			break;
+		case 3:
+			for(int i = 0; i < 5; i++){
+				beep();
+			}
+			break;
+		default:
+			break;
+	}
 }
 // player alarm light notification that is set
 void playAlarmLight(void){
-	SendString("Alarm light playing");
+	switch(lightType){
+			case 1:
+				flashLeds(1,1,1,1);
+				delay(60000);
+				flashLeds(1,1,1,1);
+				delay(60000);
+				flashLeds(1,1,1,1);
+				break;
+			case 2:
+				flashLeds(1,0,1,0);
+				delay(160000);
+				flashLeds(0,1,0,1);
+				delay(160000);
+				flashLeds(1,0,1,0);
+				delay(160000);
+				flashLeds(0,1,0,1);
+				break;
+			case 3:
+				flashLeds(1,0,0,0);
+				flashLeds(0,1,0,0);
+				flashLeds(0,0,1,0);
+				flashLeds(0,0,0,1);
+				delay(500000);
+				flashLeds(0,0,0,1);
+				flashLeds(0,0,1,0);
+				flashLeds(0,1,0,0);
+				flashLeds(1,0,0,0);
+				break;
+			default:
+				break;
+		}
 }
 // alarms
 void performAlarm(void){
-	SendString("Alarm happening\r\n");
+	SendString("!!! ALARM !!! \r\n");
+	playAlarmSound();
+	playAlarmLight();
 }
 // sends one character via UART
 void SendChar(char ch)  {
@@ -304,7 +365,7 @@ void PressedLeft(){
 	switch(menuItemArrow){
 		case 0:
 			time -= 60;
-			if(time <= 0) time = 1;
+			if(time <= 0) time = secondsInDay - 60;
 			RTCSet(time);
 			break;
 		case 1:
@@ -358,8 +419,8 @@ void PressedRight(){
 			RTCSet(time);
 			break;
 		case 1:
-			if(alarmTimeSeconds >= secondsInDay-1800) alarmTimeSeconds = 0;
 			alarmTimeSeconds += 1800;
+			if(alarmTimeSeconds >= secondsInDay-1800) alarmTimeSeconds = 0;
 			alarmOn = 1;
 			break;
 		case 2:
@@ -461,6 +522,7 @@ int PressedAction(){
 			beep();
 			break;
 	}
+	return 1;
 }
 
 // handles user input from menu
@@ -561,7 +623,47 @@ void RTC_IRQHandler(void) {
 			alarmRinging = 1;
 		}
 
+	}else {
+		//invalid time -> reset the clock
+		int a = RTC->TSR;
+		RTC->TAR = alarmTimeSeconds;
+		if(RTC->TSR > 0 && RTC->TSR < secondsInDay){
+			RTC->TSR = RTC->TSR;
+		}else{
+			RTC->TSR = 1;
+		}
 	}
+}
+// calculates how much time was spent flashing lights and beeping
+int calculateDelayCompensation(void){
+	int delay = 0;
+	switch(lightType){
+		case 1:
+			delay += 250000;
+			break;
+		case 2:
+			delay += 750000;
+			break;
+		case 3:
+			delay += 1250000;
+			break;
+		default:
+			break;
+	}
+	switch(soundType){
+		case 1:
+			delay += 250000;
+			break;
+		case 2:
+			delay += 750000;
+			break;
+		case 3:
+			delay += 1250000;
+			break;
+		default:
+			break;
+	}
+	return delay;
 }
 int main(void)
 {
@@ -571,6 +673,9 @@ int main(void)
 	unsigned int delayPeriod = 2555555;
 	unsigned int pressedAction = 1;
 	while(1){
+		if(RTC->TSR >= secondsInDay){
+			RTCSet(0);
+		}
 		drawTime();
 		// check if user wants to open the menu
 		if(!pressedAction && !(GPIOE_PDIR & BTN_SW6)){
@@ -586,10 +691,13 @@ int main(void)
 			}else if(!(GPIOE_PDIR & BTN_SW2) || !(GPIOE_PDIR & BTN_SW3) || !(GPIOE_PDIR & BTN_SW4)){
 				alarmRinging = 0;
 			}
+			//compensate for delay created by alarm ringing 250k, 750k, 1250k
+			delayPeriod -= calculateDelayCompensation();
 		}
 
-		//GPIOB_PDOR ^= LED_D9;
 		delay(delayPeriod);
+		//reset delay period
+		delayPeriod = 2555555;
 	}
 }
 ////////////////////////////////////////////////////////////////////////////////
