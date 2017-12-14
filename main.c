@@ -306,7 +306,7 @@ void Init(void){
 void SendWelcome(){
 	SendString("\r\n");
 	SendString("ALARM CLOCK\r\n");
-	SendString("This project was created by Milan Hruban at BUT VUT\r\n\r\n");
+	SendString("This project was created by Milan Hruban at FIT BUT\r\n\r\n");
 }
 // draws menu on the screen
 void drawMenu(void){
